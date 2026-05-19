@@ -1,0 +1,98 @@
+(function () {
+  // ====== EDIT THESE ======
+  var CONFIG = {
+    username: 'tomsmith',
+    password: 'SuperSecretPassword!',
+
+    // Optional XPath overrides. Leave as '' to use automatic detection.
+    xpUser:   '',   // e.g. "//input[@id='username']"
+    xpPass:   '',   // e.g. "//input[@type='password']"
+    xpSubmit: '',    // e.g. "//button[@type='submit']"
+
+    // Timings
+    POLL_INTERVAL: 300,    // ms between attempts to find fields
+    MAX_WAIT:      10000,  // ms total before giving up
+    SETTLE_DELAY:  500      // ms after filling before submit
+  };
+  // ========================
+
+  function byXPath(expr) {
+    if (!expr) return null;
+    try {
+      var r = document.evaluate(
+        expr, document, null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE, null
+      );
+      return r.singleNodeValue;
+    } catch (e) {
+      console.warn('Bookmarklet: invalid XPath:', expr, e);
+      return null;
+    }
+  }
+
+  function findFields() {
+    var pwField =
+      byXPath(CONFIG.xpPass) ||
+      document.querySelector('input[type="password"]');
+
+    var userField =
+      byXPath(CONFIG.xpUser) ||
+      document.querySelector('input[type="email"]') ||
+      document.querySelector('input[type="text"]') ||
+      document.querySelector('input[name*="user" i]') ||
+      document.querySelector('input[name*="email" i]');
+
+    return { pwField: pwField, userField: userField };
+  }
+
+  function setNativeValue(el, value) {
+    var proto = Object.getPrototypeOf(el);
+    var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+    setter.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function fillAndSubmit(userField, pwField) {
+    setNativeValue(userField, CONFIG.username);
+    setNativeValue(pwField, CONFIG.password);
+
+    setTimeout(function () {
+      if (userField.value !== CONFIG.username ||
+          pwField.value !== CONFIG.password) {
+        console.warn('Bookmarklet: fields not filled correctly, skipping submit.');
+        alert('Autofill: fields did not fill correctly — submit skipped.');
+        return;
+      }
+
+      var form = pwField.closest('form');
+      var submitBtn =
+        byXPath(CONFIG.xpSubmit) ||
+        (form && form.querySelector('button[type="submit"], input[type="submit"]')) ||
+        document.querySelector('button[type="submit"], input[type="submit"]') ||
+        (form && form.querySelector('button'));
+
+      if (submitBtn) {
+        submitBtn.click();
+      } else if (form) {
+        form.submit();
+      } else {
+        console.warn('Bookmarklet: no submit target found.');
+        alert('Autofill: filled fields but found no submit button.');
+      }
+    }, CONFIG.SETTLE_DELAY);
+  }
+
+  var start = Date.now();
+  var poll = setInterval(function () {
+    var f = findFields();
+    if (f.pwField && f.userField) {
+      clearInterval(poll);
+      fillAndSubmit(f.userField, f.pwField);
+    } else if (Date.now() - start > CONFIG.MAX_WAIT) {
+      clearInterval(poll);
+      console.warn('Bookmarklet: gave up waiting for login fields.');
+      alert('Autofill: could not find the login fields on this page.');
+    }
+  }, CONFIG.POLL_INTERVAL);
+})();
