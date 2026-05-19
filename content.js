@@ -48,6 +48,17 @@
 
       if (pwField && userField) {
         clearInterval(poll);
+
+        // Confirmation gate — ask before touching the page
+        const ok = window.confirm(
+          'Autofill: fill credentials and submit the login form on\n\n' +
+          here + ' ?'
+        );
+        if (!ok) {
+          console.log('Autofill: cancelled by user.');
+          return;
+        }
+
         fillAndSubmit(userField, pwField);
       } else if (Date.now() - start > MAX_WAIT) {
         clearInterval(poll);
@@ -61,7 +72,6 @@
 
       // Safety sleep so any framework re-render settles before we verify
       setTimeout(() => {
-        // Verify the values actually landed before submitting
         if (userField.value !== username || pwField.value !== password) {
           console.warn(
             'Autofill: fields not filled correctly, skipping submit.',
